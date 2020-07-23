@@ -62,18 +62,16 @@ from copy import deepcopy
 from warnings import warn
 from itertools import chain
 from re import sub
-from .lti import LTI, timebaseEqual, timebase, isdtime
+from .lti import LTI, common_timebase, isdtime
 from . import config
 
 __all__ = ['TransferFunction', 'tf', 'ss2tf', 'tfdata']
 
 
 # Define module default parameter values
-_xferfcn_defaults = {
-    'xferfcn.default_dt': None}
+_xferfcn_defaults = {}
 
 class TransferFunction(LTI):
-
     """TransferFunction(num, den[, dt])
 
     A class for representing transfer functions
@@ -89,13 +87,22 @@ class TransferFunction(LTI):
     means that the numerator of the transfer function from the 6th input to the
     3rd output is set to s^2 + 4s + 8.
 
-    Discrete-time transfer functions are implemented by using the 'dt'
-    instance variable and setting it to something other than 'None'.  If 'dt'
-    has a non-zero value, then it must match whenever two transfer functions
-    are combined.  If 'dt' is set to True, the system will be treated as a
-    discrete time system with unspecified sampling time. The default value of 
-    'dt' is None and can be changed by changing the value of 
-    ``control.config.defaults['xferfcn.default_dt']``.
+    A discrete time transfer function is created by specifying a nonzero 
+    'timebase' dt when the system is constructed:
+
+    * dt = 0: continuous time system (default)
+    * dt > 0: discrete time system with sampling period 'dt'
+    * dt = True: discrete time with unspecified sampling period
+    * dt = None: no timebase specified 
+
+    Systems must have compatible timebases in order to be combined. A discrete 
+    time system with unspecified sampling time (`dt = True`) can be combined 
+    with a system having a specified sampling time; the result will be a 
+    discrete time system with the sample time of the latter system. Similarly, 
+    a system with timebase `None` can be combined with a system having any 
+    timebase; the result will have the timebase of the latter system. 
+    The default value of dt can be changed by changing the value of 
+    ``control.config.defaults['control.default_dt']``.
 
     The TransferFunction class defines two constants ``s`` and ``z`` that
     represent the differentiation and delay operators in continuous and
@@ -104,9 +111,9 @@ class TransferFunction(LTI):
 
     >>> s = TransferFunction.s
     >>> G  = (s + 1)/(s**2 + 2*s + 1)
-
     """
-    def __init__(self, *args):
+    
+    def __init__(self, *args, **kwargs):
         """TransferFunction(num, den[, dt])
 
         Construct a transfer function.
@@ -124,7 +131,6 @@ class TransferFunction(LTI):
         if len(args) == 2:
             # The user provided a numerator and a denominator.
             (num, den) = args
-            dt = config.defaults['xferfcn.default_dt']
         elif len(args) == 3:
             # Discrete time transfer function
             (num, den, dt) = args
@@ -136,11 +142,6 @@ class TransferFunction(LTI):
                                 % type(args[0]))
             num = args[0].num
             den = args[0].den
-            # TODO: not sure this can ever happen since dt is always present
-            try:
-                dt = args[0].dt
-            except NameError:   # pragma: no coverage
-                dt = config.defaults['xferfcn.default_dt']
         else:
             raise ValueError("Needs 1, 2 or 3 arguments; received %i."
                              % len(args))
@@ -198,11 +199,35 @@ class TransferFunction(LTI):
                 if zeronum:
                     den[i][j] = ones(1)
 
-        LTI.__init__(self, inputs, outputs, dt)
+        LTI.__init__(self, inputs, outputs)
         self.num = num
         self.den = den
 
         self._truncatecoeff()
+
+        # get dt
+        if len(args) == 2:
+            # no dt given in positional arguments
+            if 'dt' in kwargs:
+                dt = kwargs['dt']
+            elif self.is_static_gain():
+                dt = None
+            else: 
+                dt = config.defaults['control.default_dt']
+        elif len(args) == 3:
+            # Discrete time transfer function
+            if 'dt' in kwargs:
+                warn('received multiple dt arguments, using positional arg dt=%s'%dt)
+        elif len(args) == 1:
+            # TODO: not sure this can ever happen since dt is always present
+            try:
+                dt = args[0].dt
+            except NameError:   # pragma: no coverage
+                if self.is_static_gain():
+                    dt = None
+                else: 
+                    dt = config.defaults['control.default_dt']
+        self.dt = dt
 
     def __call__(self, s):
         """Evaluate the system's transfer function for a complex variable
@@ -369,14 +394,7 @@ class TransferFunction(LTI):
                 "The first summand has %i output(s), but the second has %i."
                 % (self.outputs, other.outputs))
 
-        # Figure out the sampling time to use
-        if self.dt is None and other.dt is not None:
-            dt = other.dt       # use dt from second argument
-        elif (other.dt is None and self.dt is not None) or \
-             (timebaseEqual(self, other)):
-            dt = self.dt        # use dt from first argument
-        else:
-            raise ValueError("Systems have different sampling times")
+        dt = common_timebase(self.dt, other.dt)
 
         # Preallocate the numerator and denominator of the sum.
         num = [[[] for j in range(self.inputs)] for i in range(self.outputs)]
@@ -420,15 +438,8 @@ class TransferFunction(LTI):
         inputs = other.inputs
         outputs = self.outputs
 
-        # Figure out the sampling time to use
-        if self.dt is None and other.dt is not None:
-            dt = other.dt       # use dt from second argument
-        elif (other.dt is None and self.dt is not None) or \
-             (self.dt == other.dt):
-            dt = self.dt        # use dt from first argument
-        else:
-            raise ValueError("Systems have different sampling times")
-
+        dt = common_timebase(self.dt, other.dt)
+        
         # Preallocate the numerator and denominator of the sum.
         num = [[[0] for j in range(inputs)] for i in range(outputs)]
         den = [[[1] for j in range(inputs)] for i in range(outputs)]
@@ -471,14 +482,7 @@ class TransferFunction(LTI):
         inputs = self.inputs
         outputs = other.outputs
 
-        # Figure out the sampling time to use
-        if self.dt is None and other.dt is not None:
-            dt = other.dt       # use dt from second argument
-        elif (other.dt is None and self.dt is not None) \
-                or (self.dt == other.dt):
-            dt = self.dt        # use dt from first argument
-        else:
-            raise ValueError("Systems have different sampling times")
+        dt = common_timebase(self.dt, other.dt)
 
         # Preallocate the numerator and denominator of the sum.
         num = [[[0] for j in range(inputs)] for i in range(outputs)]
@@ -518,14 +522,7 @@ class TransferFunction(LTI):
                 "TransferFunction.__truediv__ is currently \
                 implemented only for SISO systems.")
 
-        # Figure out the sampling time to use
-        if self.dt is None and other.dt is not None:
-            dt = other.dt       # use dt from second argument
-        elif (other.dt is None and self.dt is not None) or \
-             (self.dt == other.dt):
-            dt = self.dt        # use dt from first argument
-        else:
-            raise ValueError("Systems have different sampling times")
+        dt = common_timebase(self.dt, other.dt)
 
         num = polymul(self.num[0][0], other.den[0][0])
         den = polymul(self.den[0][0], other.num[0][0])
@@ -625,9 +622,8 @@ class TransferFunction(LTI):
         # TODO: implement for discrete time systems
         if isdtime(self, strict=True):
             # Convert the frequency to discrete time
-            dt = timebase(self)
-            s = exp(1.j * omega * dt)
-            if np.any(omega * dt > pi):
+            s = exp(1.j * omega * self.dt)
+            if np.any(omega * self.dt > pi):
                 warn("_evalfr: frequency evaluation above Nyquist frequency")
         else:
             s = 1.j * omega
@@ -691,9 +687,8 @@ class TransferFunction(LTI):
         # Figure out the frequencies
         omega.sort()
         if isdtime(self, strict=True):
-            dt = timebase(self)
-            slist = np.array([exp(1.j * w * dt) for w in omega])
-            if max(omega) * dt > pi:
+            slist = np.array([exp(1.j * w * self.dt) for w in omega])
+            if max(omega) * self.dt > pi:
                 warn("freqresp: frequency evaluation above Nyquist frequency")
         else:
             slist = np.array([1j * w for w in omega])
@@ -736,15 +731,7 @@ class TransferFunction(LTI):
             raise NotImplementedError(
                 "TransferFunction.feedback is currently only implemented "
                 "for SISO functions.")
-
-        # Figure out the sampling time to use
-        if self.dt is None and other.dt is not None:
-            dt = other.dt       # use dt from second argument
-        elif (other.dt is None and self.dt is not None) or \
-             (self.dt == other.dt):
-            dt = self.dt        # use dt from first argument
-        else:
-            raise ValueError("Systems have different sampling times")
+        dt = common_timebase(self.dt, other.dt)
 
         num1 = self.num[0][0]
         den1 = self.den[0][0]
@@ -1025,7 +1012,7 @@ class TransferFunction(LTI):
 
         Returns
         -------
-        sysd : StateSpace system
+        sysd : TransferFunction system
             Discrete time system, with sampling rate Ts
 
         Notes
@@ -1090,6 +1077,18 @@ class TransferFunction(LTI):
                         # numerator is zero too: give up
                         gain[i][j] = np.nan
         return np.squeeze(gain)
+
+    def is_static_gain(self):
+        """returns True if and only if all of the numerator and denominator 
+        polynomials of the (possibly MIMO) transfer funnction are zeroth order, 
+        that is, if the system has no dynamics. """
+        for list_of_polys in self.num, self.den: 
+            for row in list_of_polys:
+                for poly in row:
+                    if len(poly) > 1: 
+                        return False
+        return True
+
 
 
 # c2d function contributed by Benjamin White, Oct 2012
@@ -1302,7 +1301,7 @@ def _convert_to_transfer_function(sys, **kw):
     raise TypeError("Can't convert given type to TransferFunction system.")
 
 
-def tf(*args):
+def tf(*args, **kwargs):
     """tf(num, den[, dt])
 
     Create a transfer function system. Can create MIMO systems.
@@ -1392,7 +1391,7 @@ def tf(*args):
     """
 
     if len(args) == 2 or len(args) == 3:
-        return TransferFunction(*args)
+        return TransferFunction(*args, **kwargs)
     elif len(args) == 1:
         # Look for special cases defining differential/delay operator
         if args[0] == 's':
@@ -1413,7 +1412,7 @@ def tf(*args):
         raise ValueError("Needs 1 or 2 arguments; received %i." % len(args))
 
 
-def ss2tf(*args):
+def ss2tf(*args, **kwargs):
     """ss2tf(sys)
 
     Transform a state space system to a transfer function.
@@ -1478,7 +1477,7 @@ def ss2tf(*args):
     from .statesp import StateSpace
     if len(args) == 4 or len(args) == 5:
         # Assume we were given the A, B, C, D matrix and (optional) dt
-        return _convert_to_transfer_function(StateSpace(*args))
+        return _convert_to_transfer_function(StateSpace(*args, **kwargs))
 
     elif len(args) == 1:
         sys = args[0]
@@ -1563,7 +1562,6 @@ def _clean_part(data):
                     data[i][j][k] = float(data[i][j][k])
 
     return data
-
 
 # Define constants to represent differentiation, unit delay
 TransferFunction.s = TransferFunction([1, 0], [1], 0)
