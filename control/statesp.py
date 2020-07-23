@@ -70,13 +70,17 @@ __all__ = ['StateSpace', 'ss', 'rss', 'drss', 'tf2ss', 'ssdata']
 
 # Define module default parameter values
 _statesp_defaults = {
-    'statesp.use_numpy_matrix': True,
-    'statesp.remove_useless_states': True, 
+    'statesp.use_numpy_matrix': False,
+    'statesp.default_dt': None,
+    'statesp.remove_useless_states': True,
     }
 
 
 def _ssmatrix(data, axis=1):
-    """Convert argument to a (possibly empty) state space matrix.
+    """Convert argument to a (possibly empty) 2D state space matrix.
+
+    The axis keyword argument makes it convenient to specify that if the input
+    is a vector, it is a row (axis=1) or column (axis=0) vector.
 
     Parameters
     ----------
@@ -93,8 +97,10 @@ def _ssmatrix(data, axis=1):
     """
     # Convert the data into an array or matrix, as configured
     # If data is passed as a string, use (deprecated?) matrix constructor
-    if config.defaults['statesp.use_numpy_matrix'] or isinstance(data, str):
+    if config.defaults['statesp.use_numpy_matrix']:
         arr = np.matrix(data, dtype=float)
+    elif isinstance(data, str):
+        arr = np.array(np.matrix(data, dtype=float))
     else:
         arr = np.array(data, dtype=float)
     ndim = arr.ndim
@@ -142,21 +148,21 @@ class StateSpace(LTI):
     `numpy.ndarray` objects.  The :func:`~control.use_numpy_matrix` function
     can be used to set the storage type.
 
-    A discrete time system is created by specifying a nonzero 'timebase', dt 
+    A discrete time system is created by specifying a nonzero 'timebase', dt
     when the system is constructed:
 
     * dt = 0: continuous time system (default)
     * dt > 0: discrete time system with sampling period 'dt'
     * dt = True: discrete time with unspecified sampling period
-    * dt = None: no timebase specified 
+    * dt = None: no timebase specified
 
-    Systems must have compatible timebases in order to be combined. A discrete 
-    time system with unspecified sampling time (`dt = True`) can be combined 
-    with a system having a specified sampling time; the result will be a 
-    discrete time system with the sample time of the latter system. Similarly, 
-    a system with timebase `None` can be combined with a system having any 
-    timebase; the result will have the timebase of the latter system. 
-    The default value of dt can be changed by changing the value of 
+    Systems must have compatible timebases in order to be combined. A discrete
+    time system with unspecified sampling time (`dt = True`) can be combined
+    with a system having a specified sampling time; the result will be a
+    discrete time system with the sample time of the latter system. Similarly,
+    a system with timebase `None` can be combined with a system having any
+    timebase; the result will have the timebase of the latter system.
+    The default value of dt can be changed by changing the value of
     ``control.config.defaults['control.default_dt']``.
     """
 
@@ -187,22 +193,32 @@ class StateSpace(LTI):
         elif len(args) == 1:
             # Use the copy constructor.
             if not isinstance(args[0], StateSpace):
-                raise TypeError("The one-argument constructor can only take in a StateSpace "
-                                "object.  Received %s." % type(args[0]))
+                raise TypeError("The one-argument constructor can only take in"
+                                " a StateSpace object."
+                                " Received %s." % type(args[0]))
             A = args[0].A
             B = args[0].B
             C = args[0].C
             D = args[0].D
         else:
-            raise ValueError("Expected 1, 4, or 5 arguments; received %i." % len(args))
+            raise ValueError(
+                "Expected 1, 4, or 5 arguments; received %i." % len(args))
 
         # Process keyword arguments
-        remove_useless = kwargs.get('remove_useless', config.defaults['statesp.remove_useless_states'])
+        remove_useless = kwargs.get(
+            'remove_useless', config.defaults['statesp.remove_useless_states'])
 
         # Convert all matrices to standard form
         A = _ssmatrix(A)
-        B = _ssmatrix(B, axis=0)
-        C = _ssmatrix(C, axis=1)
+        # if B is a 1D array, turn it into a column vector if it fits
+        if np.asarray(B).ndim == 1 and len(B) == A.shape[0]:
+            B = _ssmatrix(B, axis=0)
+        else:
+            B = _ssmatrix(B)
+        if np.asarray(C).ndim == 1 and len(C) == A.shape[0]:
+            C = _ssmatrix(C, axis=1)
+        else:
+            C = _ssmatrix(C, axis=0) #if this doesn't work, error below
         if np.isscalar(D) and D == 0 and B.shape[1] > 0 and C.shape[0] > 0:
             # If D is a scalar zero, broadcast it to the proper size
             D = np.zeros((C.shape[0], B.shape[1]))
@@ -216,10 +232,10 @@ class StateSpace(LTI):
         self.D = D
 
         # now set dt
-        if len(args) == 4: 
+        if len(args) == 4:
             if 'dt' in kwargs:
                 dt = kwargs['dt']
-            elif self.is_static_gain(): 
+            elif self.is_static_gain():
                 dt = None
             else:
                 dt = config.defaults['control.default_dt']
@@ -231,7 +247,7 @@ class StateSpace(LTI):
             try:
                 dt = args[0].dt
             except NameError:
-                if self.is_static_gain(): 
+                if self.is_static_gain():
                     dt = None
                 else:
                     dt = config.defaults['control.default_dt']
@@ -861,8 +877,8 @@ class StateSpace(LTI):
 
         prewarp_frequency : float within [0, infinity)
             The frequency [rad/s] at which to match with the input continuous-
-            time system's magnitude and phase (the gain=1 crossover frequency, 
-            for example). Should only be specified with method='bilinear' or 
+            time system's magnitude and phase (the gain=1 crossover frequency,
+            for example). Should only be specified with method='bilinear' or
             'gbt' with alpha=0.5 and ignored otherwise.
 
         Returns
@@ -887,7 +903,7 @@ class StateSpace(LTI):
         if (method=='bilinear' or (method=='gbt' and alpha==0.5)) and \
                 prewarp_frequency is not None:
             Twarp = 2*np.tan(prewarp_frequency*Ts/2)/prewarp_frequency
-        else: 
+        else:
             Twarp = Ts
         Ad, Bd, C, D, _ = cont2discrete(sys, Twarp, method, alpha)
         return StateSpace(Ad, Bd, C, D, Ts)
@@ -920,9 +936,9 @@ class StateSpace(LTI):
             # eigenvalue at DC
             gain = np.tile(np.nan, (self.outputs, self.inputs))
         return np.squeeze(gain)
-    
+
     def is_static_gain(self):
-        """True if and only if the system has no dynamics, that is, 
+        """True if and only if the system has no dynamics, that is,
         if A and B are zero. """
         return not np.any(self.A) and not np.any(self.B)
 
@@ -1237,8 +1253,8 @@ def _mimo2simo(sys, input, warn_conversion=False):
                  "Only input {i} is used." .format(i=input))
         # $X = A*X + B*U
         #  Y = C*X + D*U
-        new_B = sys.B[:, input]
-        new_D = sys.D[:, input]
+        new_B = sys.B[:, input:input+1]
+        new_D = sys.D[:, input:input+1]
         sys = StateSpace(sys.A, new_B, sys.C, new_D, sys.dt)
 
     return sys
