@@ -219,8 +219,6 @@ class InputOutputSystem(object):
 
         # Make sure timebase are compatible
         dt = common_timebase(sys1.dt, sys2.dt)
-        if dt is False:
-            raise ValueError("System timebases are not compabile")
 
         inplist = [(0, i) for i in range(sys1.ninputs)]
         outlist = [(1, i) for i in range(sys2.noutputs)]
@@ -475,8 +473,6 @@ class InputOutputSystem(object):
 
         # Make sure timebases are compatible
         dt = common_timebase(self.dt, other.dt)
-        if dt is False:
-            raise ValueError("System timebases are not compabile")
 
         inplist = [(0, i) for i in range(self.ninputs)]
         outlist = [(0, i) for i in range(self.noutputs)]
