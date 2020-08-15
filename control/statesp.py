@@ -196,7 +196,7 @@ class StateSpace(LTI):
     is `'.3g'`.
 
     `control.config.defaults['latex_repr_type']` must either be
-    `'partioned'` or `'separate'`.  If `'partitioned'`, the A, B, C, D
+    `'partitioned'` or `'separate'`.  If `'partitioned'`, the A, B, C, D
     matrices are shown as a single, partitioned matrix; if
     `'separate'`, the matrices are shown separately.
 
