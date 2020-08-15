@@ -185,17 +185,17 @@ class StateSpace(LTI):
     StateSpace instances have support for IPython LaTeX output,
     intended for pretty-printing in Jupyter notebooks.  The LaTeX
     output can be configured using
-    `control.config.defaults['latex_num_format']` and
-    `control.config.defaults['latex_repr_type']`.  The LaTeX output is
+    `control.config.defaults['statesp.latex_num_format']` and
+    `control.config.defaults['statesp.latex_repr_type']`.  The LaTeX output is
     tailored for MathJax, as used in Jupyter, and may look odd when
     typeset by non-MathJax LaTeX systems.
 
-    `control.config.defaults['latex_num_format']` is a format string
+    `control.config.defaults['statesp.latex_num_format']` is a format string
     fragment, specifically the part of the format string after `'{:'`
     used to convert floating-point numbers to strings.  By default it
     is `'.3g'`.
 
-    `control.config.defaults['latex_repr_type']` must either be
+    `control.config.defaults['statesp.latex_repr_type']` must either be
     `'partitioned'` or `'separate'`.  If `'partitioned'`, the A, B, C, D
     matrices are shown as a single, partitioned matrix; if
     `'separate'`, the matrices are shown separately.
