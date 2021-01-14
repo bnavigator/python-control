@@ -33,7 +33,7 @@ jobs:
         source $CONDA/bin/activate test-environment
 
         # Install test tools
-        conda install pytest coveralls coverage
+        conda install coveralls coverage pytest
 
         # Install python-control dependencies
         conda install numpy matplotlib scipy
