@@ -30,7 +30,7 @@ jobs:
         echo $CONDA/bin >> $GITHUB_PATH
         conda config --set channel_priority strict
         conda create -q -n test-environment -c conda-forge python=${{matrix.python-version}}
-        conda activate test-environment
+        source $CONDA/bin/activate test-environment
 
         # Install test tools
         conda install pytest coveralls coverage
