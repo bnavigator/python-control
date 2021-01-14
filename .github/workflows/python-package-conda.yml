@@ -23,22 +23,22 @@ jobs:
 
     - name: Install dependencies
       run: |
+        # Set up (virtual) X11
+        sudo apt-get install -y xvfb
+
         # Set up conda
         echo $CONDA/bin >> $GITHUB_PATH
-        conda create -q -n test-environment python=${{matrix.python-version}}
-        source $CONDA/bin/activate test-environment
-
-        # Set up (virtual) X11
-        sudo apt install -y xvfb
+        conda config --set channel_priority strict
+        conda create -q -n test-environment -c conda-forge python=${{matrix.python-version}}
+        conda activate test-environment
 
         # Install test tools
-        conda install pip coverage pytest
-        pip install coveralls
+        conda install pytest coveralls coverage
 
         # Install python-control dependencies
         conda install numpy matplotlib scipy
         if [[ '${{matrix.slycot}}' == 'conda' ]]; then
-          conda install -c conda-forge slycot
+          conda install slycot
         fi
 
     - name: Test with pytest
