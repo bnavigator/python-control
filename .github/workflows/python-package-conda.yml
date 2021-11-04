@@ -37,7 +37,6 @@ jobs:
 
         # Install python-control dependencies
         conda install nomkl numpy matplotlib scipy
-        conda remove mkl mkl-service
         if [[ '${{matrix.slycot}}' == 'conda' ]]; then
           conda install -c conda-forge slycot
         fi
