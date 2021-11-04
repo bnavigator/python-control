@@ -28,8 +28,6 @@ jobs:
         conda create -q -n test-environment python=${{matrix.python-version}}
         source $CONDA/bin/activate test-environment
 
-        conda install nomkl
-
         # Set up (virtual) X11
         sudo apt install -y xvfb
 
@@ -38,7 +36,8 @@ jobs:
         pip install coveralls
 
         # Install python-control dependencies
-        conda install numpy matplotlib scipy
+        conda install nomkl numpy matplotlib scipy
+        conda remove mkl mkl-service
         if [[ '${{matrix.slycot}}' == 'conda' ]]; then
           conda install -c conda-forge slycot
         fi
