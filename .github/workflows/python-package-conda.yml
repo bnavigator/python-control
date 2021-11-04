@@ -36,7 +36,9 @@ jobs:
         pip install coveralls
 
         # Install python-control dependencies
-        conda install -c conda-forge numpy matplotlib scipy
+        conda install -c conda-forge 'libblas=*=*mkl' mkl
+        echo "libblas * *mkl" >> $CONDA_PREFIX/conda-meta/pinned
+        conda install -c conda-forge numpy matplotlib scipy     
         if [[ '${{matrix.slycot}}' == 'conda' ]]; then
           conda install -c conda-forge slycot
         fi
