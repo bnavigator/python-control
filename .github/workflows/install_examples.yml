@@ -1,4 +1,4 @@
-name: setup.py, examples
+name: Setup, Examples, Notebooks
 
 on: [push, pull_request]
 
@@ -7,13 +7,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python
-      uses: actions/setup-python@v2
-    - name: Install Python dependencies
+    - uses: actions/checkout@v3
+    - name: Install Python dependencies from conda-forge
       run: |
-        # Set up conda
+        # Set up conda using the preinstalled GHA conda environment
         echo $CONDA/bin >> $GITHUB_PATH
+        conda config --add channels conda-forge
+        conda config --set channel_priority strict
 
         # Set up (virtual) X11
         sudo apt install -y xvfb
@@ -23,10 +23,10 @@ jobs:
 
         # Install python-control dependencies
         conda install numpy matplotlib scipy jupyter
-        conda install -c conda-forge slycot pmw
+        conda install slycot pmw
 
-    - name: Install with setup.py
-      run: python setup.py install
+    - name: Install from source
+      run: pip install .
 
     - name: Run examples
       run: |
