@@ -15,7 +15,7 @@ jobs:
         conda config --add channels conda-forge
         conda config --set channel_priority strict
 
-        # Install test tools
+        # Install build and test tools
         conda install pip pytest
 
         # Install python-control dependencies
