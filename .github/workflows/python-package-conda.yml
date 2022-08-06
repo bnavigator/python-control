@@ -30,7 +30,7 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Set up (virtual) X11
-      run:  sudo apt install -y xvfb
+      run:  sudo apt-get -y install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 x11-utils
 
     - name: Setup Conda
       uses: conda-incubator/setup-miniconda@v2
@@ -62,8 +62,7 @@ jobs:
       shell: bash -l {0}
       env:
         PYTHON_CONTROL_ARRAY_AND_MATRIX: ${{ matrix.array-and-matrix }}
-      run: |
-        xvfb-run --auto-servernum pytest --cov=control --cov-config=.coveragerc control/tests
+      run: xvfb-run pytest --cov=control --cov-config=.coveragerc control/tests
 
     - name: Coveralls parallel
       # https://github.com/coverallsapp/github-action
